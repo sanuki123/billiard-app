@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Billiards Angle & Ghost Ball</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background:#111; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; color:#eee; }
+    #tableWrap { position: relative; display:inline-block; max-width: 100%; }
+    #tableImage, #table { width: 100%; height: auto; display:block; }
+    #table { position:absolute; inset:0; touch-action:none; }
+  </style>
+</head>
+<body>
+  <div id="tableWrap">
+    <img id="tableImage" src="table.jpg" alt="billiards table background" />
+    <canvas id="table"></canvas>
+  </div>
+
+  <script>
+    const img = document.getElementById('tableImage');
+    const canvas = document.getElementById('table');
+    const ctx = canvas.getContext('2d');
+
+    const BALL_RADIUS_PX = 11;   // 球半径
+
+    const state = {
+      r: BALL_RADIUS_PX,
+      cue:    { xRatio: 0.30, yRatio: 0.70 },
+      obj:    { xRatio: 0.55, yRatio: 0.55 },
+      pocket: { xRatio: 0.92, yRatio: 0.08 },
+      dragging: null
+    };
+
+    img.addEventListener('load', () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      if (!w || !h) return;
+      canvas.width = w;
+      canvas.height = h;
+      ['cue','obj','pocket'].forEach(k => {
+        const p = pxFromRatio(state[k], w, h);
+        internalSet(k, p.x, p.y);
+      });
+      draw();
+    });
+
+    img.addEventListener('error', () => { canvas.width = 1024; canvas.height = 590; draw(); });
+
+    // ===== helpers =====
+    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+    function pxFromRatio(p, w, h){ return { x: p.xRatio * w, y: p.yRatio * h }; }
+    function ratioFromPx(p, w, h){ return { xRatio: p.x / w, yRatio: p.y / h }; }
+    function internalSet(key, x, y){
+      const w = canvas.width, h = canvas.height, rad = state.r;
+      x = clamp(x, rad, w - rad);
+      y = clamp(y, rad, h - rad);
+      Object.assign(state[key], ratioFromPx({x,y}, w, h));
+    }
+    function getPositions(){
+      const w = canvas.width, h = canvas.height, r = state.r;
+      return {
+        cue:    pxFromRatio(state.cue, w, h),
+        obj:    pxFromRatio(state.obj, w, h),
+        pocket: pxFromRatio(state.pocket, w, h),
+        r
+      };
+    }
+    function signedAngle(ax, ay, bx, by){
+      let diff = (Math.atan2(ay, ax) - Math.atan2(by, bx)) * 180 / Math.PI;
+      if (diff > 180) diff -= 360;
+      if (diff <= -180) diff += 360;
+      return diff;
+    }
+    function drawLabel(text, x, y){
+      ctx.font = '16px sans-serif';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,.55)';
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = 'white';
+      ctx.fillText(text, x, y);
+    }
+
+    // ===== draw =====
+    function draw(){
+      const { cue, obj, pocket, r } = getPositions();
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // obj→pocket 単位ベクトル
+      const opx = pocket.x - obj.x, opy = pocket.y - obj.y;
+      const opl = Math.hypot(opx, opy) || 1e-6;
+      const oux = opx / opl, ouy = opy / opl;
+
+      // ゴーストボール中心（先玉の反対側へ2r）
+      const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
+
+      // ===== 先玉 → ポケット（透明度 0.3）※先に描く =====
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 2 * r;
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+      ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(pocket.x, pocket.y); ctx.stroke();
+      ctx.restore();
+
+      // ===== 手玉 → ゴースト（透明度 0.3）※上に重ねる =====
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 2 * r;
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      const gdx = ghost.x - cue.x, gdy = ghost.y - cue.y;
+      const glen = Math.hypot(gdx, gdy) || 1e-6;
+      const gux = gdx / glen, guy = gdy / glen;
+      const extendLen = Math.max(canvas.width, canvas.height) * 2;
+      const endX = cue.x + gux * extendLen;
+      const endY = cue.y + guy * extendLen;
+      ctx.beginPath(); ctx.moveTo(cue.x, cue.y); ctx.lineTo(endX, endY); ctx.stroke();
+      ctx.restore();
+
+      // ===== ボール類 =====
+      function ball(x,y,rad,fill){
+        ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
+        ctx.fillStyle=fill; ctx.fill();
+        ctx.lineWidth = 0.5; ctx.strokeStyle='#000'; ctx.stroke(); // ← 0.5
+      }
+      ball(cue.x,  cue.y,  r, 'white');
+      ball(obj.x,  obj.y,  r, 'yellow');
+
+      // ゴーストボール（赤枠：線幅0.5）
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 0.5; // ← 0.5
+      ctx.beginPath(); ctx.arc(ghost.x, ghost.y, r, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+
+      // 接点（半径半分）
+      const contact = { x: obj.x - oux * r, y: obj.y - ouy * r };
+      ctx.beginPath();
+      ctx.arc(contact.x, contact.y, Math.max(1.5, r*0.25/4), 0, Math.PI*2);
+      ctx.fillStyle='#ff5964'; ctx.fill();
+
+      // ポケット丸（線幅0.5）
+      ctx.beginPath(); ctx.arc(pocket.x, pocket.y, r, 0, Math.PI*2);
+      ctx.fillStyle='rgba(0,255,0,0.20)'; ctx.fill();
+      ctx.lineWidth = 0.5; ctx.strokeStyle='blue'; ctx.stroke();
+
+      // ===== カット角 β と 厚み τ =====
+      const vShotX = ghost.x - cue.x,  vShotY = ghost.y - cue.y;   // 手玉→ゴースト
+      const vObjX  = pocket.x - obj.x, vObjY  = pocket.y - obj.y;  // 先玉→ポケット
+      const betaDeg = signedAngle(vShotX, vShotY, vObjX, vObjY);
+      const betaAbs = Math.min(90, Math.abs(betaDeg));
+      const thickness = Math.max(0, 1 - Math.sin(betaAbs * Math.PI / 180)); // τ = 1 - sin(|β|)
+
+      // ラベル（角度差の横に厚み）
+      drawLabel(`角度差: ${betaDeg.toFixed(1)}°   厚み: ${thickness.toFixed(2)}`, 12, 24);
+
+      // ===== ミニ重なり図（左上 / 手玉=白枠＋縦径，先玉=黒枠）=====
+      const miniR   = 60;   // 5倍サイズ
+      const anchorX = 90;   // 位置：角度差表示の少し右下
+      const anchorY = 46;
+      const cx1 = anchorX + miniR; // 手玉（白枠）
+      const cy  = anchorY + miniR;
+
+      // 中心間の横オフセット = 2R * sin(β)
+      const centerDist = 2 * miniR * Math.sin(betaAbs * Math.PI / 180);
+      const sign = betaDeg >= 0 ? -1 : 1;
+      const cx2 = cx1 + sign * centerDist;  // 先玉（黒枠）
+
+      ctx.save();
+      ctx.lineWidth = 1;
+      // 手玉（白枠）
+      ctx.strokeStyle = 'white';
+      ctx.beginPath(); ctx.arc(cx1, cy, miniR, 0, Math.PI*2); ctx.stroke();
+      // 白枠の縦の直径線
+      ctx.beginPath(); ctx.moveTo(cx1, cy - miniR); ctx.lineTo(cx1, cy + miniR); ctx.stroke();
+      // 先玉（黒枠）
+      ctx.strokeStyle = 'black';
+      ctx.beginPath(); ctx.arc(cx2, cy, miniR, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+
+      // ===== 最前面：手玉中心→ゴースト中心の黒細線 =====
+      ctx.save();
+      ctx.lineWidth = 0.2;
+      ctx.strokeStyle = 'black';
+      ctx.beginPath();
+      ctx.moveTo(cue.x, cue.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ===== ポインタ操作 =====
+    function getPointerPos(evt){
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY };
+    }
+    function hit(pt, c, rad){ return Math.hypot(pt.x - c.x, pt.y - c.y) <= rad + 6; }
+
+    function onPointerDown(e){
+      const { cue, obj, pocket, r } = getPositions();
+      const pt = getPointerPos(e);
+      if (hit(pt, cue, r)) state.dragging = 'cue';
+      else if (hit(pt, obj, r)) state.dragging = 'obj';
+      else if (hit(pt, pocket, r)) state.dragging = 'pocket';
+      if (state.dragging) canvas.setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e){
+      if (!state.dragging) return;
+      const pt = getPointerPos(e);
+      internalSet(state.dragging, pt.x, pt.y);
+      draw();
+    }
+    function onPointerUp(e){ state.dragging = null; try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} }
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerleave', () => state.dragging = null);
+  </script>
+</body>
+</html>
