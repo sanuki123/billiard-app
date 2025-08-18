@@ -179,10 +179,10 @@
       const labelWidth = measureLabelWidth(labelText);
       drawButton(12 + labelWidth + 20, 24);
 
-      // 左上ミニ重なり図
+      // 左上ミニ重なり図（白を上に）
       drawMiniOverlap(betaDeg, betaAbs);
 
-      // ★復活：白帯の中央ガイド線（キュー中心 → 白帯終端）
+      // 白帯の中央ガイド線（キュー中心 → 白帯終端）
       ctx.save();
       ctx.setLineDash([]);
       ctx.lineWidth = 0.2;
@@ -194,22 +194,28 @@
       ctx.restore();
     }
 
-    // === ミニ重なり図（白=手玉/直径縦線、黒=先玉） ===
+    // === ミニ重なり図（白を上に描画するため、黒→白の順で描く） ===
     function drawMiniOverlap(betaDeg, betaAbs){
       const miniR = 60;
       const anchorX = 90, anchorY = 46;
-      const cx1 = anchorX + miniR, cy = anchorY + miniR;
+      const cx1 = anchorX + miniR, cy = anchorY + miniR; // 手玉（白）
       const centerDist = 2 * miniR * Math.sin(betaAbs * Math.PI / 180);
-      const sign = (betaDeg >= 0) ? -1 : 1;
-      const cx2 = cx1 + sign * centerDist;
+      const sign = (betaDeg >= 0) ? -1 : 1;              // 左右切替
+      const cx2 = cx1 + sign * centerDist;               // 先玉（黒）
 
       ctx.save();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'white';
-      ctx.beginPath(); ctx.arc(cx1, cy, miniR, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx1, cy - miniR); ctx.lineTo(cx1, cy + miniR); ctx.stroke();
+
+      // 先玉：黒枠（先に描く）
       ctx.strokeStyle = 'black';
       ctx.beginPath(); ctx.arc(cx2, cy, miniR, 0, Math.PI * 2); ctx.stroke();
+
+      // 手玉：白枠（後に描いて上に重ねる）
+      ctx.strokeStyle = 'white';
+      ctx.beginPath(); ctx.arc(cx1, cy, miniR, 0, Math.PI * 2); ctx.stroke();
+      // 手玉の直径縦線
+      ctx.beginPath(); ctx.moveTo(cx1, cy - miniR); ctx.lineTo(cx1, cy + miniR); ctx.stroke();
+
       ctx.restore();
     }
 
@@ -238,7 +244,7 @@
       const { cue,obj,pocket,r }=getPositions();
       const pt=getPointerPos(e);
       if (hitBoxHit(pt)) {
-        state.showTangent = !state.showTangent;
+        state.showTangent = !state.showTangent; // ボタントグル
         draw();
         return;
       }
