@@ -76,7 +76,7 @@
       return diff;
     }
 
-    // === 角度差ラベル（元のまま：固定16px） ===
+    // === 角度差ラベル（固定16pxのまま） ===
     function drawLabel(text, x, y){
       ctx.font = '16px sans-serif';
       ctx.lineWidth = 4;
@@ -85,7 +85,6 @@
       ctx.fillStyle = 'white';
       ctx.fillText(text, x, y);
     }
-    // ラベル幅を16pxフォントで測る（安全のためフォントを明示）
     function measureLabelWidth(text){
       ctx.save();
       ctx.font = '16px sans-serif';
@@ -105,12 +104,14 @@
 
       const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
 
+      // オブジェクト→ポケットの帯
       ctx.save();
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = 2 * r; ctx.strokeStyle = 'rgba(255,255,0,0.3)';
       ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(pocket.x, pocket.y); ctx.stroke();
       ctx.restore();
 
+      // キュー→ゴーストの白帯
       ctx.save();
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = 2 * r; ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -128,6 +129,7 @@
       const betaAbs = Math.min(90, Math.abs(betaDeg));
       const displayIsZero = (Math.round(betaDeg * 10) / 10) === 0;
 
+      // 接線（90°帯）
       if (state.showTangent && !displayIsZero){
         const perpCW  = { x:  ouy, y: -oux };
         const perpCCW = { x: -ouy, y:  oux };
@@ -144,6 +146,7 @@
         ctx.restore();
       }
 
+      // ボール描画
       function ball(x,y,rad,fill){
         ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
         ctx.fillStyle=fill; ctx.fill();
@@ -152,28 +155,65 @@
       ball(cue.x, cue.y, r, 'white');
       ball(obj.x, obj.y, r, 'yellow');
 
+      // ゴースト円
       ctx.save(); ctx.setLineDash([]);
       ctx.strokeStyle = 'red'; ctx.lineWidth = 0.5;
       ctx.beginPath(); ctx.arc(ghost.x, ghost.y, r, 0, Math.PI*2); ctx.stroke(); ctx.restore();
 
+      // 接触点
       const contact = { x: obj.x - oux * r, y: obj.y - ouy * r };
       ctx.beginPath(); ctx.arc(contact.x, contact.y, Math.max(1.5, r*0.25/4), 0, Math.PI*2);
       ctx.fillStyle='#ff5964'; ctx.fill();
 
+      // ポケット
       ctx.beginPath(); ctx.arc(pocket.x, pocket.y, r, 0, Math.PI*2);
       ctx.fillStyle='rgba(0,255,0,0.20)'; ctx.fill();
       ctx.lineWidth = 0.5; ctx.strokeStyle='blue'; ctx.stroke();
 
+      // ラベル
       const thickness = Math.max(0, 1 - Math.sin(betaAbs * Math.PI / 180));
       const labelText = `角度差: ${betaDeg.toFixed(1)}°   厚み: ${thickness.toFixed(2)}`;
       drawLabel(labelText, 12, 24);
 
-      // === ボタン（キャンバス上、固定16px、角度差に揃える） ===
+      // キャンバス内ボタン
       const labelWidth = measureLabelWidth(labelText);
       drawButton(12 + labelWidth + 20, 24);
+
+      // 左上ミニ重なり図
+      drawMiniOverlap(betaDeg, betaAbs);
+
+      // ★復活：白帯の中央ガイド線（キュー中心 → 白帯終端）
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 0.2;
+      ctx.strokeStyle = 'black';
+      ctx.beginPath();
+      ctx.moveTo(cue.x, cue.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // === キャンバス内ボタン描画＆クリック判定（固定16px） ===
+    // === ミニ重なり図（白=手玉/直径縦線、黒=先玉） ===
+    function drawMiniOverlap(betaDeg, betaAbs){
+      const miniR = 60;
+      const anchorX = 90, anchorY = 46;
+      const cx1 = anchorX + miniR, cy = anchorY + miniR;
+      const centerDist = 2 * miniR * Math.sin(betaAbs * Math.PI / 180);
+      const sign = (betaDeg >= 0) ? -1 : 1;
+      const cx2 = cx1 + sign * centerDist;
+
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'white';
+      ctx.beginPath(); ctx.arc(cx1, cy, miniR, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx1, cy - miniR); ctx.lineTo(cx1, cy + miniR); ctx.stroke();
+      ctx.strokeStyle = 'black';
+      ctx.beginPath(); ctx.arc(cx2, cy, miniR, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // === キャンバス内ボタン（固定16px） ===
     function drawButton(x, y){
       const text = `[手玉の進行方向:${state.showTangent ? 'ON' : 'OFF'}]`;
       ctx.font = '16px sans-serif';
@@ -181,8 +221,8 @@
       ctx.fillText(text, x, y);
 
       const m = ctx.measureText(text);
-      const ascent  = m.actualBoundingBoxAscent  ?? 12; // だいたい 16px * 0.75
-      const descent = m.actualBoundingBoxDescent ?? 4;  // だいたい 16px * 0.25
+      const ascent  = m.actualBoundingBoxAscent  ?? 12;
+      const descent = m.actualBoundingBoxDescent ?? 4;
       btnHitBox = { x, y: y - ascent, w: m.width, h: ascent + descent };
     }
 
@@ -198,7 +238,7 @@
       const { cue,obj,pocket,r }=getPositions();
       const pt=getPointerPos(e);
       if (hitBoxHit(pt)) {
-        state.showTangent = !state.showTangent; // ボタントグル
+        state.showTangent = !state.showTangent;
         draw();
         return;
       }
@@ -225,7 +265,6 @@
              pt.y >= btnHitBox.y && pt.y <= btnHitBox.y + btnHitBox.h;
     }
 
-    // リサイズ時は再描画（内部座標は不変なので相対位置も不変）
     window.addEventListener('resize', draw);
 
     function pxFromRatio(p,w,h){ return { x:p.xRatio*w, y:p.yRatio*h }; }
