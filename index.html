@@ -10,12 +10,25 @@
     #tableWrap { position: relative; display:block; width:100%; }
     #tableImage, #table { width: 100%; height: auto; display:block; }
     #table { position:absolute; inset:0; touch-action:none; }
+
+    /* ボタン位置：中央から50%左(=左から25%) に配置。その他は前回のまま */
+    #uiBar { position:absolute; top:8px; left:30%; transform:translateX(-50%); z-index:10; }
+    #uiBar button{
+      padding:8px 14px;
+      border-radius:10px;
+      font: 500 1.6em/1.1 system-ui; /* 文字サイズ2倍 */
+      background:rgba(0,0,0,0.25);
+      color:#eee;
+      border:1px solid rgba(255,255,255,0.35);
+      cursor:pointer; backdrop-filter:blur(4px);
+    }
   </style>
 </head>
 <body>
   <div id="tableWrap">
     <img id="tableImage" src="table.jpg" alt="billiards table background" />
     <canvas id="table"></canvas>
+    <div id="uiBar"><button id="toggleTangent" type="button">手玉の進行方向:OFF</button></div>
   </div>
 
   <script>
@@ -30,7 +43,8 @@
       cue:    { xRatio: 0.30, yRatio: 0.70 },
       obj:    { xRatio: 0.55, yRatio: 0.55 },
       pocket: { xRatio: 0.92, yRatio: 0.08 },
-      dragging: null
+      dragging: null,
+      showTangent: false, // 手玉の進行方向（90°帯）
     };
 
     img.addEventListener('load', () => {
@@ -67,6 +81,7 @@
         r
       };
     }
+    // 基準：ベクトルaからbへ見た符号付き角度（+は時計回り）
     function signedAngle(ax, ay, bx, by){
       let diff = (Math.atan2(ay, ax) - Math.atan2(by, bx)) * 180 / Math.PI;
       if (diff > 180) diff -= 360;
@@ -95,7 +110,7 @@
       // ゴーストボール中心（先玉の反対側へ2r）
       const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
 
-      // ===== 先玉 → ポケット（透明度 0.3）※先に描く =====
+      // ===== 先玉 → ポケット（黄帯 透明度0.3）※先に描く =====
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -104,7 +119,7 @@
       ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(pocket.x, pocket.y); ctx.stroke();
       ctx.restore();
 
-      // ===== 手玉 → ゴースト（透明度 0.3）※上に重ねる =====
+      // ===== 手玉 → ゴースト（白帯 透明度0.3）※上に重ねる =====
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -119,11 +134,38 @@
       ctx.beginPath(); ctx.moveTo(cue.x, cue.y); ctx.lineTo(endX, endY); ctx.stroke();
       ctx.restore();
 
+      // ===== 手玉の進行方向（90°分離の灰色帯）※ON時のみ =====
+      const vShotX = ghost.x - cue.x,  vShotY = ghost.y - cue.y;   // 手玉→ゴースト
+      const vObjX  = pocket.x - obj.x, vObjY  = pocket.y - obj.y;  // 先玉→ポケット
+      const betaDeg = signedAngle(vShotX, vShotY, vObjX, vObjY);
+      const betaAbs = Math.min(90, Math.abs(betaDeg));
+      const displayIsZero = (Math.round(betaDeg * 10) / 10) === 0; // 表示(小数1桁)で0.0°なら非表示
+
+      if (state.showTangent && !displayIsZero){
+        // 先玉の進行方向に対する±90°のうち、カット方向側を180°反転
+        const perpCW  = { x:  ouy, y: -oux }; // -90°
+        const perpCCW = { x: -ouy, y:  oux }; // +90°
+        const t = (betaDeg >= 0) ? perpCW : perpCCW;
+        const dirX = -t.x, dirY = -t.y;              // 180°反転
+        const tExtend = Math.max(canvas.width, canvas.height) * 2;
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2 * r;
+        ctx.strokeStyle = 'rgba(200,200,200,0.3)'; // 白より少しグレー
+        ctx.beginPath();
+        ctx.moveTo(ghost.x, ghost.y);
+        ctx.lineTo(ghost.x + dirX * tExtend, ghost.y + dirY * tExtend);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // ===== ボール類 =====
       function ball(x,y,rad,fill){
         ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
         ctx.fillStyle=fill; ctx.fill();
-        ctx.lineWidth = 0.5; ctx.strokeStyle='#000'; ctx.stroke(); // ← 0.5
+        ctx.lineWidth = 0.5; ctx.strokeStyle='#000'; ctx.stroke();
       }
       ball(cue.x,  cue.y,  r, 'white');
       ball(obj.x,  obj.y,  r, 'yellow');
@@ -132,7 +174,7 @@
       ctx.save();
       ctx.setLineDash([]);
       ctx.strokeStyle = 'red';
-      ctx.lineWidth = 0.5; // ← 0.5
+      ctx.lineWidth = 0.5;
       ctx.beginPath(); ctx.arc(ghost.x, ghost.y, r, 0, Math.PI*2); ctx.stroke();
       ctx.restore();
 
@@ -147,14 +189,8 @@
       ctx.fillStyle='rgba(0,255,0,0.20)'; ctx.fill();
       ctx.lineWidth = 0.5; ctx.strokeStyle='blue'; ctx.stroke();
 
-      // ===== カット角 β と 厚み τ =====
-      const vShotX = ghost.x - cue.x,  vShotY = ghost.y - cue.y;   // 手玉→ゴースト
-      const vObjX  = pocket.x - obj.x, vObjY  = pocket.y - obj.y;  // 先玉→ポケット
-      const betaDeg = signedAngle(vShotX, vShotY, vObjX, vObjY);
-      const betaAbs = Math.min(90, Math.abs(betaDeg));
+      // ===== 厚み表示など =====
       const thickness = Math.max(0, 1 - Math.sin(betaAbs * Math.PI / 180)); // τ = 1 - sin(|β|)
-
-      // ラベル（角度差の横に厚み）
       drawLabel(`角度差: ${betaDeg.toFixed(1)}°   厚み: ${thickness.toFixed(2)}`, 12, 24);
 
       // ===== ミニ重なり図（左上 / 手玉=白枠＋縦径，先玉=黒枠）=====
@@ -163,8 +199,6 @@
       const anchorY = 46;
       const cx1 = anchorX + miniR; // 手玉（白枠）
       const cy  = anchorY + miniR;
-
-      // 中心間の横オフセット = 2R * sin(β)
       const centerDist = 2 * miniR * Math.sin(betaAbs * Math.PI / 180);
       const sign = betaDeg >= 0 ? -1 : 1;
       const cx2 = cx1 + sign * centerDist;  // 先玉（黒枠）
@@ -221,6 +255,18 @@
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointerleave', () => state.dragging = null);
+
+    // ===== ボタン：進行方向（90°帯）表示切替 =====
+    const btn = document.getElementById('toggleTangent');
+    btn.addEventListener('click', () => {
+      state.showTangent = !state.showTangent;
+      btn.textContent = `手玉の進行方向:${state.showTangent ? 'ON' : 'OFF'}`;
+      draw();
+    });
+
+    // ===== 小関数 =====
+    function pxFromRatio(p, w, h){ return { x: p.xRatio * w, y: p.yRatio * h }; }
+    function ratioFromPx(p, w, h){ return { xRatio: p.x / w, yRatio: p.y / h }; }
   </script>
 </body>
 </html>
