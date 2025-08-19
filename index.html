@@ -104,6 +104,13 @@
 
       const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
 
+      // ※ 白帯のジオメトリ（終端座標）をここで計算して以後再利用
+      const gdx = ghost.x - cue.x, gdy = ghost.y - cue.y;
+      const glen = Math.hypot(gdx, gdy) || 1e-6;
+      const gux = gdx / glen, guy = gdy / glen;
+      const extendLen = Math.max(canvas.width, canvas.height) * 2;
+      const endX = cue.x + gux * extendLen, endY = cue.y + guy * extendLen;
+
       // オブジェクト→ポケットの帯
       ctx.save();
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -111,17 +118,8 @@
       ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(pocket.x, pocket.y); ctx.stroke();
       ctx.restore();
 
-      // キュー→ゴーストの白帯
-      ctx.save();
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.lineWidth = 2 * r; ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-      const gdx = ghost.x - cue.x, gdy = ghost.y - cue.y;
-      const glen = Math.hypot(gdx, gdy) || 1e-6;
-      const gux = gdx / glen, guy = gdy / glen;
-      const extendLen = Math.max(canvas.width, canvas.height) * 2;
-      const endX = cue.x + gux * extendLen, endY = cue.y + guy * extendLen;
-      ctx.beginPath(); ctx.moveTo(cue.x, cue.y); ctx.lineTo(endX, endY); ctx.stroke();
-      ctx.restore();
+      // （削除）キュー→ゴーストの白帯の“先頭側”描画は行わない
+      // 代わりに最後に一度だけ描画して最前面にする
 
       const vShotX = ghost.x - cue.x, vShotY = ghost.y - cue.y;
       const vObjX  = pocket.x - obj.x, vObjY  = pocket.y - obj.y;
@@ -179,8 +177,19 @@
       const labelWidth = measureLabelWidth(labelText);
       drawButton(12 + labelWidth + 20, 24);
 
-      // 左上ミニ重なり図（白を上に）
+      // 左上ミニ重なり図（白を上に＋接点表示）
       drawMiniOverlap(betaDeg, betaAbs);
+
+      // ★ 白帯を最後に“1回だけ”描画（→ 先玉より上に表示）
+      ctx.save();
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.lineWidth = 2 * r; 
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath();
+      ctx.moveTo(cue.x, cue.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.restore();
 
       // 白帯の中央ガイド線（キュー中心 → 白帯終端）
       ctx.save();
@@ -194,7 +203,7 @@
       ctx.restore();
     }
 
-    // === ミニ重なり図（白を上に描画するため、黒→白の順で描く） ===
+    // === ミニ重なり図（白を上に描画。接点も表示） ===
     function drawMiniOverlap(betaDeg, betaAbs){
       const miniR = 60;
       const anchorX = 90, anchorY = 46;
@@ -210,11 +219,17 @@
       ctx.strokeStyle = 'black';
       ctx.beginPath(); ctx.arc(cx2, cy, miniR, 0, Math.PI * 2); ctx.stroke();
 
-      // 手玉：白枠（後に描いて上に重ねる）
+      // 手玉：白枠（後に描いて上に重ねる）＋直径縦線
       ctx.strokeStyle = 'white';
       ctx.beginPath(); ctx.arc(cx1, cy, miniR, 0, Math.PI * 2); ctx.stroke();
-      // 手玉の直径縦線
       ctx.beginPath(); ctx.moveTo(cx1, cy - miniR); ctx.lineTo(cx1, cy + miniR); ctx.stroke();
+
+      // 接点（2球の中心の中点）を赤い点で表示
+      const cxMid = (cx1 + cx2) / 2;
+      ctx.beginPath();
+      ctx.arc(cxMid, cy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff5964';
+      ctx.fill();
 
       ctx.restore();
     }
