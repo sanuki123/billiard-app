@@ -285,13 +285,13 @@
 	  ctx.fillStyle = 'white';
 	  ctx.fill();
 
-	  // 線1：進行方向（白）… cue→ghost の向き
-	  ctx.beginPath();
-	  ctx.moveTo(centerX, centerY);
-	  ctx.lineTo(centerX + sux * miniR, centerY + suy * miniR);
-	  ctx.strokeStyle = 'white';
-	  ctx.lineWidth = 2;
-	  ctx.stroke();
+      // 線1：進行方向（白）… cue→ghost の向き（前後両方向に伸ばす）
+      ctx.beginPath();
+      ctx.moveTo(centerX - sux * miniR, centerY - suy * miniR); // ←逆方向へ延長
+      ctx.lineTo(centerX + sux * miniR, centerY + suy * miniR); // ←従来の進行方向
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
 	  // 線2：接点方向（赤）… ghost 中心→接点 の向き（＝ obj→pocket の向き）
 	  ctx.beginPath();
