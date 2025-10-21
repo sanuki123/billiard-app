@@ -180,6 +180,8 @@
       // 左上ミニ重なり図（白を上に＋接点表示）
       drawMiniOverlap(betaDeg, betaAbs);
 
+      drawCueTopView();
+
       // ★ 白帯を最後に“1回だけ”描画（→ 先玉より上に表示）
       ctx.save();
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -233,6 +235,76 @@
 
       ctx.restore();
     }
+    
+    
+    // === 手玉トップビュー（ミニ図の直下に表示） ===
+	// ・円：手玉を真上から見た図（ミニ図と同サイズ）
+	// ・線1：手玉の進行方向（cue → ghost の単位ベクトル）
+	// ・線2：接点方向（ghost 中心 → 接点 ＝ obj→pocket 方向）
+	function drawCueTopView(){
+	  // 既存ミニ図の位置・サイズに合わせる
+	  const miniR   = 60;
+	  const anchorX = 90, anchorY = 46;
+	  // ミニ図（上）より少し下へオフセット
+	  const gapY    = 20;
+	  const centerX = anchorX + miniR;
+	  const centerY = anchorY + (miniR * 2) + gapY + miniR;
+
+	  // 現在の配置から必要なベクトルを再計算（他のロジックは変更しない）
+	  const { cue, obj, pocket, r } = getPositions();
+
+	  // obj→pocket の単位ベクトル（接点方向の基準）
+	  const opx = pocket.x - obj.x, opy = pocket.y - obj.y;
+	  const opl = Math.hypot(opx, opy) || 1e-6;
+	  const oux = opx / opl,          ouy = opy / opl;
+
+	  // ゴースト中心
+	  const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
+
+	  // 手玉の進行方向（cue→ghost）
+	  const sdx = ghost.x - cue.x, sdy = ghost.y - cue.y;
+	  const sdl = Math.hypot(sdx, sdy) || 1e-6;
+	  const sux = sdx / sdl,           suy = sdy / sdl;
+
+	  // 接点は obj から半径 r だけポケット方向へ戻した点
+	  // ゴースト中心から接点への方向は +ou（長さ r）
+	  const cux = oux, cuy = ouy;
+
+	  ctx.save();
+	  ctx.lineWidth = 1;
+
+	  // 円（手玉）
+	  ctx.strokeStyle = 'white';
+	  ctx.beginPath();
+	  ctx.arc(centerX, centerY, miniR, 0, Math.PI * 2);
+	  ctx.stroke();
+
+	  // 中心点（視認性用・小さめ）
+	  ctx.beginPath();
+	  ctx.arc(centerX, centerY, 2, 0, Math.PI * 2);
+	  ctx.fillStyle = 'white';
+	  ctx.fill();
+
+	  // 線1：進行方向（白）… cue→ghost の向き
+	  ctx.beginPath();
+	  ctx.moveTo(centerX, centerY);
+	  ctx.lineTo(centerX + sux * miniR, centerY + suy * miniR);
+	  ctx.strokeStyle = 'white';
+	  ctx.lineWidth = 2;
+	  ctx.stroke();
+
+	  // 線2：接点方向（赤）… ghost 中心→接点 の向き（＝ obj→pocket の向き）
+	  ctx.beginPath();
+	  ctx.moveTo(centerX, centerY);
+	  ctx.lineTo(centerX + cux * miniR, centerY + cuy * miniR);
+	  ctx.strokeStyle = '#ff5964';
+	  ctx.lineWidth = 2;
+	  ctx.stroke();
+
+	  ctx.restore();
+	}
+
+    
 
     // === キャンバス内ボタン（固定16px） ===
     function drawButton(x, y){
