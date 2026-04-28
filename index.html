@@ -182,6 +182,9 @@
 
       drawCueTopView();
 
+      // 左下：手玉と先玉が接触した瞬間の図
+      drawContactMomentView();
+
       // ★ 白帯を最後に“1回だけ”描画（→ 先玉より上に表示）
       ctx.save();
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -305,6 +308,69 @@
 	}
 
     
+
+
+
+    // === 左下：手玉と先玉が接触した瞬間の図 ===
+    // ・白い線の○を2つ描く
+    // ・左の○：手玉（ゴースト位置）
+    // ・右の○：先玉
+    function drawContactMomentView(){
+      const miniR = 42;
+      const marginX = 75;
+      const marginY = 80;
+
+      const { cue, obj, pocket, r } = getPositions();
+
+      // obj→pocket の単位ベクトル（接触時の2球配置用）
+      const opx = pocket.x - obj.x, opy = pocket.y - obj.y;
+      const opl = Math.hypot(opx, opy) || 1e-6;
+      const oux = opx / opl,          ouy = opy / opl;
+
+      // ゴースト中心
+      const ghost = { x: obj.x - oux * (2*r), y: obj.y - ouy * (2*r) };
+
+      // 手玉の進行方向（cue→ghost）
+      const sdx = ghost.x - cue.x, sdy = ghost.y - cue.y;
+      const sdl = Math.hypot(sdx, sdy) || 1e-6;
+      const sux = sdx / sdl,           suy = sdy / sdl;
+
+      // 左下に、現在の先玉→ポケット方向に合わせて2つの○を接触表示
+      const centerX = marginX + miniR * 2;
+      const centerY = canvas.height - marginY - miniR;
+      const objX = centerX + oux * miniR;
+      const objY = centerY + ouy * miniR;
+      const cueX = objX - oux * miniR * 2;
+      const cueY = objY - ouy * miniR * 2;
+
+      ctx.save();
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 1.5;
+
+      // 手玉
+      ctx.beginPath();
+      ctx.arc(cueX, cueY, miniR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 手玉の進行方向（直径線）
+      ctx.beginPath();
+      ctx.moveTo(cueX - sux * miniR, cueY - suy * miniR);
+      ctx.lineTo(cueX + sux * miniR, cueY + suy * miniR);
+      ctx.stroke();
+
+      // 先玉
+      ctx.beginPath();
+      ctx.arc(objX, objY, miniR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 先玉にも同じ角度の直径線
+      ctx.beginPath();
+      ctx.moveTo(objX - sux * miniR, objY - suy * miniR);
+      ctx.lineTo(objX + sux * miniR, objY + suy * miniR);
+      ctx.stroke();
+
+      ctx.restore();
+    }
 
     // === キャンバス内ボタン（固定16px） ===
     function drawButton(x, y){
